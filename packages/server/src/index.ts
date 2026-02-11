@@ -125,6 +125,7 @@ export * from "./utils/traefik/redirect";
 export * from "./utils/traefik/security";
 export * from "./utils/traefik/types";
 export * from "./utils/traefik/web-server";
+export * from "./utils/topology/detect-dependencies";
 export * from "./utils/volume-backups/index";
 export * from "./utils/watch-paths/should-deploy";
 export * from "./wss/utils";

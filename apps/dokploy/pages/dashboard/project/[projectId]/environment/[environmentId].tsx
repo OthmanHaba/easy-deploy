@@ -9,7 +9,9 @@ import {
 	CircuitBoard,
 	FolderInput,
 	GlobeIcon,
+	LayoutGrid,
 	Loader2,
+	Network,
 	Play,
 	PlusIcon,
 	Search,
@@ -27,6 +29,7 @@ import { useRouter } from "next/router";
 import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import superjson from "superjson";
+import dynamic from "next/dynamic";
 import { AddAiAssistant } from "@/components/dashboard/project/add-ai-assistant";
 import { AddApplication } from "@/components/dashboard/project/add-application";
 import { AddCompose } from "@/components/dashboard/project/add-compose";
@@ -98,6 +101,14 @@ import {
 import { cn } from "@/lib/utils";
 import { appRouter } from "@/server/api/root";
 import { api } from "@/utils/api";
+
+const TopologyView = dynamic(
+	() =>
+		import("@/components/dashboard/topology/topology-view").then(
+			(mod) => mod.TopologyView,
+		),
+	{ ssr: false },
+);
 
 export type Services = {
 	appName: string;
@@ -295,6 +306,20 @@ const EnvironmentPage = (
 		}
 		return "lastDeploy-desc";
 	});
+
+	const [viewMode, setViewMode] = useState<"list" | "topology">(() => {
+		if (typeof window !== "undefined") {
+			return (
+				(localStorage.getItem("servicesViewMode") as "list" | "topology") ||
+				"list"
+			);
+		}
+		return "list";
+	});
+
+	useEffect(() => {
+		localStorage.setItem("servicesViewMode", viewMode);
+	}, [viewMode]);
 
 	useEffect(() => {
 		localStorage.setItem("servicesSort", sortBy);
@@ -1322,6 +1347,26 @@ const EnvironmentPage = (
 									</div>
 
 									<div className="flex flex-col gap-2 lg:flex-row lg:gap-4 lg:items-center">
+										<div className="flex items-center gap-0.5 border rounded-md p-0.5">
+											<Button
+												variant={viewMode === "list" ? "secondary" : "ghost"}
+												size="icon"
+												className="h-7 w-7"
+												onClick={() => setViewMode("list")}
+											>
+												<LayoutGrid className="size-3.5" />
+											</Button>
+											<Button
+												variant={
+													viewMode === "topology" ? "secondary" : "ghost"
+												}
+												size="icon"
+												className="h-7 w-7"
+												onClick={() => setViewMode("topology")}
+											>
+												<Network className="size-3.5" />
+											</Button>
+										</div>
 										<div className="w-full relative">
 											<FocusShortcutInput
 												placeholder="Filter services..."
@@ -1449,128 +1494,138 @@ const EnvironmentPage = (
 									</div>
 								</div>
 
-								<div className="flex w-full gap-8">
-									{emptyServices ? (
-										<div className="flex h-[70vh] w-full flex-col items-center justify-center">
-											<FolderInput className="size-8 self-center text-muted-foreground" />
-											<span className="text-center font-medium text-muted-foreground">
-												No services added yet. Click on Create Service.
-											</span>
-										</div>
-									) : filteredServices.length === 0 ? (
-										<div className="flex h-[70vh] w-full flex-col items-center justify-center">
-											<Search className="size-8 self-center text-muted-foreground" />
-											<span className="text-center font-medium text-muted-foreground">
-												No services found with the current filters
-											</span>
-											<span className="text-sm text-muted-foreground">
-												Try adjusting your search or filters
-											</span>
-										</div>
-									) : (
-										<div className="flex w-full flex-col gap-4">
-											<div className="gap-5 pb-10 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
-												{filteredServices?.map((service) => (
-													<Card
-														key={service.id}
-														onClick={() => {
-															router.push(
-																`/dashboard/project/${projectId}/environment/${environmentId}/services/${service.type}/${service.id}`,
-															);
-														}}
-														className="flex flex-col group relative cursor-pointer bg-transparent transition-colors hover:bg-border"
-													>
-														{service.serverId && (
-															<div className="absolute -left-1 -top-2">
-																<ServerIcon className="size-4 text-muted-foreground" />
-															</div>
-														)}
-														<div className="absolute -right-1 -top-2">
-															<StatusTooltip status={service.status} />
-														</div>
-
-														<div
-															className={cn(
-																"absolute -left-3 -bottom-3 size-9 translate-y-1 rounded-full p-0 transition-all duration-200 z-10 bg-background border",
-																selectedServices.includes(service.id)
-																	? "opacity-100 translate-y-0"
-																	: "opacity-0 group-hover:translate-y-0 group-hover:opacity-100",
-															)}
-															onClick={(e) =>
-																handleServiceSelect(service.id, e)
-															}
-														>
-															<div className="h-full w-full flex items-center justify-center">
-																<Checkbox
-																	checked={selectedServices.includes(
-																		service.id,
-																	)}
-																	className="data-[state=checked]:bg-primary"
-																/>
-															</div>
-														</div>
-
-														<CardHeader>
-															<CardTitle className="flex items-center justify-between">
-																<div className="flex flex-row items-center gap-2 justify-between w-full">
-																	<div className="flex flex-col gap-2">
-																		<span className="text-base flex items-center gap-2 font-medium leading-none flex-wrap">
-																			{service.name}
-																		</span>
-																		{service.description && (
-																			<span className="text-sm font-medium text-muted-foreground">
-																				{service.description}
-																			</span>
-																		)}
-																	</div>
-
-																	<span className="text-sm font-medium text-muted-foreground self-start">
-																		{service.type === "postgres" && (
-																			<PostgresqlIcon className="h-7 w-7" />
-																		)}
-																		{service.type === "redis" && (
-																			<RedisIcon className="h-7 w-7" />
-																		)}
-																		{service.type === "mariadb" && (
-																			<MariadbIcon className="h-7 w-7" />
-																		)}
-																		{service.type === "mongo" && (
-																			<MongodbIcon className="h-7 w-7" />
-																		)}
-																		{service.type === "mysql" && (
-																			<MysqlIcon className="h-7 w-7" />
-																		)}
-																		{service.type === "application" && (
-																			<GlobeIcon className="h-6 w-6" />
-																		)}
-																		{service.type === "compose" && (
-																			<CircuitBoard className="h-6 w-6" />
-																		)}
-																	</span>
-																</div>
-															</CardTitle>
-														</CardHeader>
-														<CardFooter className="mt-auto">
-															<div className="space-y-1 text-sm w-full">
-																{service.serverName && (
-																	<div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-																		<ServerIcon className="size-3" />
-																		<span className="truncate">
-																			{service.serverName}
-																		</span>
-																	</div>
-																)}
-																<DateTooltip date={service.createdAt}>
-																	Created
-																</DateTooltip>
-															</div>
-														</CardFooter>
-													</Card>
-												))}
+								{viewMode === "topology" ? (
+									<div className="flex w-full">
+										<TopologyView
+											environment={currentEnvironment}
+											projectId={projectId}
+											environmentId={environmentId}
+										/>
+									</div>
+								) : (
+									<div className="flex w-full gap-8">
+										{emptyServices ? (
+											<div className="flex h-[70vh] w-full flex-col items-center justify-center">
+												<FolderInput className="size-8 self-center text-muted-foreground" />
+												<span className="text-center font-medium text-muted-foreground">
+													No services added yet. Click on Create Service.
+												</span>
 											</div>
-										</div>
-									)}
-								</div>
+										) : filteredServices.length === 0 ? (
+											<div className="flex h-[70vh] w-full flex-col items-center justify-center">
+												<Search className="size-8 self-center text-muted-foreground" />
+												<span className="text-center font-medium text-muted-foreground">
+													No services found with the current filters
+												</span>
+												<span className="text-sm text-muted-foreground">
+													Try adjusting your search or filters
+												</span>
+											</div>
+										) : (
+											<div className="flex w-full flex-col gap-4">
+												<div className="gap-5 pb-10 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+													{filteredServices?.map((service) => (
+														<Card
+															key={service.id}
+															onClick={() => {
+																router.push(
+																	`/dashboard/project/${projectId}/environment/${environmentId}/services/${service.type}/${service.id}`,
+																);
+															}}
+															className="flex flex-col group relative cursor-pointer bg-transparent transition-colors hover:bg-border"
+														>
+															{service.serverId && (
+																<div className="absolute -left-1 -top-2">
+																	<ServerIcon className="size-4 text-muted-foreground" />
+																</div>
+															)}
+															<div className="absolute -right-1 -top-2">
+																<StatusTooltip status={service.status} />
+															</div>
+
+															<div
+																className={cn(
+																	"absolute -left-3 -bottom-3 size-9 translate-y-1 rounded-full p-0 transition-all duration-200 z-10 bg-background border",
+																	selectedServices.includes(service.id)
+																		? "opacity-100 translate-y-0"
+																		: "opacity-0 group-hover:translate-y-0 group-hover:opacity-100",
+																)}
+																onClick={(e) =>
+																	handleServiceSelect(service.id, e)
+																}
+															>
+																<div className="h-full w-full flex items-center justify-center">
+																	<Checkbox
+																		checked={selectedServices.includes(
+																			service.id,
+																		)}
+																		className="data-[state=checked]:bg-primary"
+																	/>
+																</div>
+															</div>
+
+															<CardHeader>
+																<CardTitle className="flex items-center justify-between">
+																	<div className="flex flex-row items-center gap-2 justify-between w-full">
+																		<div className="flex flex-col gap-2">
+																			<span className="text-base flex items-center gap-2 font-medium leading-none flex-wrap">
+																				{service.name}
+																			</span>
+																			{service.description && (
+																				<span className="text-sm font-medium text-muted-foreground">
+																					{service.description}
+																				</span>
+																			)}
+																		</div>
+
+																		<span className="text-sm font-medium text-muted-foreground self-start">
+																			{service.type === "postgres" && (
+																				<PostgresqlIcon className="h-7 w-7" />
+																			)}
+																			{service.type === "redis" && (
+																				<RedisIcon className="h-7 w-7" />
+																			)}
+																			{service.type === "mariadb" && (
+																				<MariadbIcon className="h-7 w-7" />
+																			)}
+																			{service.type === "mongo" && (
+																				<MongodbIcon className="h-7 w-7" />
+																			)}
+																			{service.type === "mysql" && (
+																				<MysqlIcon className="h-7 w-7" />
+																			)}
+																			{service.type === "application" && (
+																				<GlobeIcon className="h-6 w-6" />
+																			)}
+																			{service.type === "compose" && (
+																				<CircuitBoard className="h-6 w-6" />
+																			)}
+																		</span>
+																	</div>
+																</CardTitle>
+															</CardHeader>
+															<CardFooter className="mt-auto">
+																<div className="space-y-1 text-sm w-full">
+																	{service.serverName && (
+																		<div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+																			<ServerIcon className="size-3" />
+																			<span className="truncate">
+																				{service.serverName}
+																			</span>
+																		</div>
+																	)}
+																	<DateTooltip date={service.createdAt}>
+																		Created
+																	</DateTooltip>
+																</div>
+															</CardFooter>
+														</Card>
+													))}
+												</div>
+											</div>
+										)}
+									</div>
+								)}
 							</>
 						</CardContent>
 					</div>
